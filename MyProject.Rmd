@@ -1,0 +1,140 @@
+---
+title: "Peer-graded Assignment: Prediction Assignmen"
+output: html_document
+---
+
+**1. Background**
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
+
+**1. Load required packages for analysis**
+
+```{r, echo=TRUE}
+library(caret)
+library(rpart)
+library(ggplot2)
+library(corrplot)
+library(randomForest)
+library(rattle)
+```
+
+```{r, echo=TRUE}
+set.seed(12345)
+```
+
+**3. Loading the data**
+
+```{r, echo=TRUE}
+training_raw <- read.csv("pml-training.csv")[,-1]
+testing <- read.csv("pml-testing.csv")[,-1]
+# check dimension of the training and test dataset
+dim(training_raw)
+```
+```{r, echo=TRUE}
+dim(testing)
+```
+
+**4. Cleaning the data**
+
+```{r, echo=TRUE}
+# remove predictors that have many missing/NA values or non-unique values
+NZV <- nearZeroVar(training_raw)
+training <- training_raw[, -NZV]
+testing <- testing[, -NZV]
+
+# remove cases that have many missing/NA values
+NaValues <- sapply(training, function(x) mean(is.na(x))) > 0.9
+training <- training[, NaValues == "FALSE"]
+testing <- testing[, NaValues == "FALSE"]
+
+# remove id and time variables
+training <- training[,-c(1:5)]
+testing <- testing[,-c(1:5)]
+
+# check dimension of the cleaned up dataset
+dim(training)
+```
+
+```{r, echo=TRUE}
+dim(testing)
+```
+
+With the cleaning process above, the number of variables for the analysis has been reduced to 53 only.
+
+```{r, echo=TRUE}
+head(training)
+```
+
+**5. Preparing the data partition**
+
+```{r, echo=TRUE}
+inTrain <- createDataPartition(y= training$classe, p = 0.7, list = FALSE)
+training <- training[inTrain, ]
+crossvalidation <- training[-inTrain, ]
+```
+
+**6. Preprocessing with PCA**
+
+
+
+```{r, echo=TRUE}
+# decision trees
+model_tree <- train(classe~., data = training, method = "rpart")
+# print result of model prediction on original training and crossvalidation dataset
+predict_training_tree <- predict(model_tree, training)
+confusionmatrix_training_tree <- confusionMatrix(table(predict_training_tree, training$classe))
+
+predict_crossvalidation_tree <- predict(model_tree, crossvalidation)
+confusionmatrix_cv_tree <- confusionMatrix(table(predict_crossvalidation_tree, crossvalidation$classe))
+
+print(confusionmatrix_cv_tree)
+```
+
+
+```{r, echo=TRUE}
+# random forest
+model_rf <- train(classe~., data = training, method = "rf")
+# print result of model prediction on original training and crossvalidation dataset
+predict_training_rf <- predict(model_rf, training)
+confusionmatrix_training_rf <- confusionMatrix(table(predict_training_rf, training$classe))
+
+predict_crossvalidation_rf <- predict(model_rf, crossvalidation)
+confusionmatrix_cv_rf <- confusionMatrix(table(predict_crossvalidation_rf, crossvalidation$classe))
+
+print(confusionmatrix_cv_rf)
+```
+
+
+**7. Conclusion**
+
+The confusionmatrix showed that the accuracy of the random forest models is better than the decision tree model. Therefore, we used this model to predict on the testing dataset.
+
+**8. Predict on testing dataset**
+
+
+```{r, echo=TRUE}
+predict_testing <- predict(model_rf, testing)
+predict_testing
+```
+
+**9. Appendix**
+
+```{r, echo=TRUE}
+# explore the remianing predictors
+# check the factor variables
+predictor_factor <- which(sapply(training, class) == "factor")
+# explore correlation between predictors
+predictor_cor <- abs(cor(training[,-predictor_factor]))
+# turn lower tri to 0
+predictor_cor[lower.tri(predictor_cor, diag = TRUE)] <- 0
+
+```
+
+
+
+```{r, echo=TRUE}
+# find highly correlated predictors
+which(predictor_cor > 0.8, arr.ind = TRUE)
+```
+
+# Therefore, there are highly correlated predictors, principal component analysis is necessary.
